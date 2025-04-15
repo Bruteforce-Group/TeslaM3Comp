@@ -1,0 +1,166 @@
+version: '3.8'
+
+services:
+  # Core API service
+  core:
+    build:
+      context: ./core
+    restart: unless-stopped
+    depends_on:
+      - database
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@database:5432/tesla
+      - LLM_SERVICE_URL=http://llm:8080
+      - OPENCV_SERVICE_URL=http://opencv:8081
+      - LOG_LEVEL=info
+    volumes:
+      - core_data:/app/data
+      - core_logs:/app/logs
+      - shared_images:/app/images:ro
+    ports:
+      - "8000:8000"
+    networks:
+      - tesla_network
+
+  # LLM service
+  llm:
+    build:
+      context: ./llm
+    restart: unless-stopped
+    environment:
+      - MODEL_PATH=/app/models/llama3
+      - ENABLE_GPU=false
+      - CLOUD_FALLBACK=true
+      - LOG_LEVEL=info
+    volumes:
+      - llm_models:/app/models
+      - llm_logs:/app/logs
+      - llm_config:/app/config
+    ports:
+      - "8080:8080"
+    networks:
+      - tesla_network
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 4G
+
+  # OpenCV service
+  opencv:
+    build:
+      context: ./opencv
+    restart: unless-stopped
+    environment:
+      - CAMERA_SOURCE=/dev/video0
+      - ENABLE_GPU=false
+      - LOG_LEVEL=info
+    volumes:
+      - opencv_models:/app/models
+      - opencv_logs:/app/logs
+      - shared_images:/app/data/images
+    ports:
+      - "8081:8081"
+    devices:
+      - /dev/video0:/dev/video0
+    networks:
+      - tesla_network
+
+  # OBD service
+  obd:
+    build:
+      context: ./obd
+    restart: unless-stopped
+    environment:
+      - OBD_DEVICE=/dev/ttyUSB0
+      - CORE_API_URL=http://core:8000
+      - LOG_LEVEL=info
+    volumes:
+      - obd_logs:/app/logs
+      - obd_data:/app/data
+    ports:
+      - "8082:8082"
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    networks:
+      - tesla_network
+
+  # Web UI
+  webui:
+    build:
+      context: ./webui
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - core
+      - llm
+      - opencv
+      - obd
+    networks:
+      - tesla_network
+
+  # Database
+  database:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=tesla
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - tesla_network
+
+  # Monitoring
+  monitoring:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - tesla_network
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    depends_on:
+      - monitoring
+    networks:
+      - tesla_network
+
+networks:
+  tesla_network:
+    driver: bridge
+
+volumes:
+  core_data:
+  core_logs:
+  llm_models:
+  llm_logs:
+  llm_config:
+  opencv_models:
+  opencv_logs:
+  obd_logs:
+  obd_data:
+  db_data:
+  shared_images:
+  prometheus_data:
+  grafana_data:

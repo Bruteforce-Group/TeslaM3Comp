@@ -1,0 +1,13 @@
+fastapi==0.104.1
+uvicorn==0.23.2
+pydantic==2.4.2
+python-dotenv==1.0.0
+requests==2.31.0
+numpy==1.24.3
+python-obd==0.7.1
+pyserial==3.5
+loguru==0.7.2
+prometheus-client==0.17.1
+pybluez==0.23
+pyusb==1.2.1
+psutil==5.9.6
