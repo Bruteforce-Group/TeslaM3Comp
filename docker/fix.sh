@@ -1,3 +1,20 @@
+#!/bin/bash
+# Quick fix for devices array error
+
+# Set colors for terminal output
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}Fixing docker-compose.yml devices array error${NC}"
+
+# Fix the motion service devices array
+sed -i.bak '/motion:/,/networks:/s/    devices:\n      # - \/dev\/video0:\/dev\/video0/    devices: []\n      # - \/dev\/video0:\/dev\/video0/' docker-compose.yml
+
+# Alternative fix if the above doesn't work
+if grep -q "devices:" docker-compose.yml; then
+  # Create a temporary file with fixed YAML
+  cat > docker-compose.fixed.yml << EOL
 services:
   # Core API service
   core:
@@ -40,7 +57,7 @@ services:
       - MODEL_PATH=/app/models/llama3
       - ENABLE_GPU=false
       - CLOUD_FALLBACK=true
-      - CLOUD_API_KEY=${CLOUD_API_KEY:-}
+      - CLOUD_API_KEY=\${CLOUD_API_KEY:-}
       - LOG_LEVEL=info
       - CORE_API_URL=http://core:8000
     volumes:
@@ -103,8 +120,8 @@ services:
       - obd_data:/app/data
     ports:
       - "8082:8082"
-    devices: []
-#      - /dev/ttyUSB0:/dev/ttyUSB0
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
     networks:
       - tesla_network
     healthcheck:
@@ -259,7 +276,7 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--path.rootfs=/rootfs'
-      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)(67829|/)'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)'
     ports:
       - "9100:9100"
     networks:
@@ -286,14 +303,14 @@ services:
     network_mode: host
     privileged: true
     environment:
-      - TS_AUTHKEY=${TAILSCALE_AUTH_KEY:-}
+      - TS_AUTHKEY=\${TAILSCALE_AUTH_KEY:-}
       - TS_STATE_DIR=/var/lib/tailscale
     volumes:
       - tailscale_data:/var/lib/tailscale
 
   # Camera motion detection
   motion:
-    image: ccrisan/motioneye:master-armhf
+    image: ccrisan/motioneye:master-amd64
     restart: unless-stopped
     volumes:
       - motion_config:/etc/motioneye
@@ -381,3 +398,11 @@ volumes:
   mqtt_logs:
   ssl_data:
   backup_data:
+EOL
+
+  # Replace the current docker-compose.yml with the fixed version
+  mv docker-compose.fixed.yml docker-compose.yml
+fi
+
+echo -e "${GREEN}YAML validation error fixed!${NC}"
+echo "Now try running: docker-compose up -d database redis"

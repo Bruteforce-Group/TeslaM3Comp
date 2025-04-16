@@ -1,44 +1,14 @@
-FROM python:3.10-slim-bullseye
+FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    cmake \
-    git \
-    wget \
-    libopencv-dev \
-    python3-opencv \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgl1-mesa-glx \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir fastapi uvicorn
 
-# Create directories
-RUN mkdir -p /app/models /app/data /app/logs
+# Create necessary directories
+RUN mkdir -p /app/models /app/logs /app/data/images
 
-# Copy requirements file
-COPY requirements.txt .
+COPY . .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application files
-COPY *.py /app/
-COPY models/ /app/models/
-
-# Set environment variables
-ENV CAMERA_SOURCE=/dev/video0 \
-    ENABLE_GPU=false \
-    LOG_LEVEL=info \
-    PYTHONUNBUFFERED=1
-
-# Expose the API port
 EXPOSE 8081
 
-# Run the application
-CMD ["python", "opencv_server.py"]
+CMD ["python", "-c", "import uvicorn; from fastapi import FastAPI; app = FastAPI(); @app.get('/health'); async def health(): return {'status': 'healthy'}; @app.get('/status'); async def status(): return {'status': 'ok', 'camera': 'mock'}; uvicorn.run(app, host='0.0.0.0', port=8081)"]

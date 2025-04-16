@@ -1,0 +1,26 @@
+[Unit]
+Description=Tesla Model 3 Companion
+After=docker.service network-online.target
+Requires=docker.service network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=30
+WorkingDirectory=/home/pi/TeslaM3Comp/docker
+ExecStart=/usr/bin/docker-compose up
+ExecStop=/usr/bin/docker-compose down
+User=pi
+Group=pi
+
+# Set memory and CPU limits
+MemoryLimit=7G
+CPUWeight=100
+
+# Environment
+Environment=PATH=/usr/bin:/bin:/usr/local/bin
+
+[Install]
+WantedBy=multi-user.target 

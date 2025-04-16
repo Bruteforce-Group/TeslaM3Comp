@@ -1,238 +1,300 @@
-# Docker Compose Deployment Guide for Tesla Model 3 Raspberry Pi 5 Integration
+# Deployment Guide - Tesla Model 3 Companion
 
-This guide provides step-by-step instructions for deploying the containerized Tesla Model 3 Raspberry Pi 5 integration system.
+This guide provides step-by-step instructions for deploying the Tesla Model 3 Companion system on a Raspberry Pi 5.
 
-## Prerequisites
+## Hardware Requirements
 
-- Raspberry Pi 5 with 8GB RAM
+- Raspberry Pi 5 with 8GB RAM (4GB minimum)
 - 64GB or larger microSD card (Class 10 or UHS-I/II recommended)
 - Official Raspberry Pi 5V/5A power supply
-- Raspberry Pi OS 64-bit (Bullseye or newer) installed
-- Docker and Docker Compose installed
-- Internet connection for initial setup
+- Reliable cooling solution (heatsink, fan, or case with cooling)
 - USB OBD-II adapter compatible with Tesla Model 3
 - USB camera or Raspberry Pi Camera Module
-- Optional: USB SSD for improved performance and reliability
+- Ethernet connection (recommended) or Wi-Fi adapter
+- Optional: GPS module for location tracking
 
-## Installation Steps
+## Software Prerequisites
 
-### 1. Install Required Software
+1. Install Raspberry Pi OS (64-bit) with desktop or lite version
+2. Update your system:
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   ```
+3. Install Docker:
+   ```bash
+   curl -sSL https://get.docker.com | sh
+   ```
+4. Add your user to the Docker group:
+   ```bash
+   sudo usermod -aG docker $USER
+   ```
+5. Log out and log back in for changes to take effect
+6. Install Docker Compose:
+   ```bash
+   sudo apt install -y python3-pip
+   sudo pip3 install docker-compose
+   ```
+7. Verify installation:
+   ```bash
+   docker --version
+   docker-compose --version
+   ```
 
-```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
+## System Configuration
 
-# Install Docker
-curl -sSL https://get.docker.com | sh
+1. Enable the camera interface if you're using the Raspberry Pi Camera Module:
+   ```bash
+   sudo raspi-config
+   ```
+   Navigate to "Interface Options" > "Camera" and enable it
 
-# Add current user to docker group
-sudo usermod -aG docker $USER
+2. Configure USB devices:
+   - Connect your OBD-II adapter and camera
+   - Check they are detected properly:
+     ```bash
+     ls -l /dev/video0
+     ls -l /dev/ttyUSB0
+     ```
 
-# Install Docker Compose
-sudo apt install -y docker-compose
+3. Optimize your Raspberry Pi for performance:
+   - Edit config.txt file:
+     ```bash
+     sudo nano /boot/config.txt
+     ```
+   - Add or modify these lines:
+     ```
+     # Overclock (if needed and with proper cooling)
+     arm_freq=2000
+     gpu_freq=750
+     
+     # Memory split (allocate more to CPU for LLM)
+     gpu_mem=128
+     
+     # Disable Bluetooth if not needed
+     dtoverlay=disable-bt
+     ```
 
-# Install additional dependencies
-sudo apt install -y git python3-pip libffi-dev libssl-dev
-```
+4. Configure swapfile for additional memory:
+   ```bash
+   sudo nano /etc/dphys-swapfile
+   ```
+   Change `CONF_SWAPSIZE=100` to `CONF_SWAPSIZE=2048`
+   ```bash
+   sudo systemctl restart dphys-swapfile
+   ```
 
-Log out and log back in for group changes to take effect.
+## Deploying the Application
 
-### 2. Clone the Repository
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/TeslaM3Comp.git
+   cd TeslaM3Comp/docker
+   ```
 
-```bash
-# Create project directory
-mkdir -p ~/tesla_model3_rpi_project
+2. Configure environment variables:
+   ```bash
+   cp .env.example .env
+   nano .env
+   ```
+   Update all the variables with your specific values, especially:
+   - `JWT_SECRET` (generate a strong random key)
+   - `POSTGRES_PASSWORD`
+   - `REDIS_PASSWORD`
+   - `MQTT_PASSWORD`
+   - `CLOUD_API_KEY` (if using cloud LLM backup)
+   - `TAILSCALE_AUTH_KEY` (if using Tailscale for remote access)
 
-# Clone the repository (if using Git) or copy files
-git clone https://github.com/yourusername/tesla_model3_rpi_project.git ~/tesla_model3_rpi_project
+3. Download LLM model:
+   ```bash
+   chmod +x llm/download_model.sh
+   ./llm/download_model.sh
+   ```
+   This will download the Llama 3 model to the appropriate directory.
 
-# Navigate to the docker directory
-cd ~/tesla_model3_rpi_project/docker
-```
+4. Start the services:
+   ```bash
+   docker-compose up -d
+   ```
+   The first startup may take some time as it builds all the containers and downloads necessary assets.
 
-### 3. Configure Environment
+5. Check that all services are running:
+   ```bash
+   docker-compose ps
+   ```
+   All services should show as "Up" with their health status.
 
-Review and modify the following files as needed:
+## Post-Installation Configuration
 
-- `docker-compose.yml`: Adjust resource limits if necessary
-- `llm/config/api_keys.json`: Add your OpenAI and Anthropic API keys if you want to use cloud fallback
-- `obd/obd_server.py`: Verify the OBD device path matches your setup
+1. Access the web interface at `http://your-raspberry-pi-ip`
 
-### 4. Prepare Volumes
+2. Log in with default credentials:
+   - Username: `admin`
+   - Password: `teslaadmin`
 
-```bash
-# Create directories for persistent storage
-mkdir -p ~/tesla_model3_rpi_project/data/{llm_models,images,database}
+3. Change the default password immediately
 
-# Download Llama 3 model (this may take some time)
-cd ~/tesla_model3_rpi_project/docker
-./llm/download_model.sh
-```
+4. Configure system settings:
+   - Go to Settings > System and update your preferences
+   - Configure notification settings
+   - Set up vehicle profile with your Tesla Model 3 details
 
-### 5. Start the Services
+5. Set up SSL for secure access:
+   - Generate SSL certificates or use Let's Encrypt:
+     ```bash
+     mkdir -p ssl
+     cd ssl
+     openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout privkey.pem -out fullchain.pem
+     ```
+   - Move certificates to the SSL volume:
+     ```bash
+     sudo cp *.pem /var/lib/docker/volumes/docker_ssl_data/_data/
+     ```
+   - Edit the nginx configuration to enable HTTPS by uncommenting the relevant sections
+   - Restart the web service:
+     ```bash
+     docker-compose restart webui
+     ```
 
-```bash
-# Start all services in detached mode
-docker-compose up -d
+6. Set up Tailscale for secure remote access:
+   - The Tailscale service should automatically connect using your auth key
+   - Verify connection status:
+     ```bash
+     docker-compose exec tailscale tailscale status
+     ```
+   - You can now securely access your system remotely via Tailscale
 
-# Check if all services are running
-docker-compose ps
-```
+## Monitoring and Maintenance
 
-### 6. Access the Web Interface
+1. Access Grafana at `http://your-raspberry-pi-ip:3000`
+   - Username: `admin`
+   - Password: `admin` (change this immediately)
 
-Open a web browser and navigate to:
+2. Explore the pre-configured dashboards:
+   - System Overview
+   - Vehicle Data
+   - Security Events
+   - Service Health
 
-```
-http://localhost
-```
+3. Regular maintenance:
+   - Check system logs:
+     ```bash
+     docker-compose logs -f
+     ```
+   - Monitor disk space:
+     ```bash
+     df -h
+     ```
+   - Check backup status:
+     ```bash
+     ls -l /var/lib/docker/volumes/docker_backup_data/_data/
+     ```
+   - Update the system:
+     ```bash
+     git pull
+     docker-compose pull
+     docker-compose up -d
+     ```
 
-Or if accessing from another device on the same network:
+## Setting Up Automatic Startup
 
-```
-http://<raspberry-pi-ip-address>
-```
+To ensure your Tesla Model 3 Companion starts automatically at boot:
 
-### 7. Configure System Settings
+1. Copy the systemd service file to the systemd directory:
+   ```bash
+   sudo cp teslam3companion.service /etc/systemd/system/
+   ```
 
-1. Navigate to the "System Settings" page in the web interface
-2. Configure the following:
-   - Camera settings
-   - OBD connection parameters
-   - LLM preferences
-   - Storage locations
-   - Security analysis sensitivity
+2. Edit the service file to match your username and installation path:
+   ```bash
+   sudo nano /etc/systemd/system/teslam3companion.service
+   ```
+   Update the `WorkingDirectory`, `User`, and `Group` fields as needed.
 
-### 8. Test the System
+3. Reload systemd to recognize the new service:
+   ```bash
+   sudo systemctl daemon-reload
+   ```
 
-1. Navigate to the "Camera View" page to verify camera feed
-2. Check "Vehicle Data" page to confirm OBD connection
-3. Test plate recognition with a sample image
-4. Verify LLM functionality in the "LLM Settings" page
+4. Enable the service to start at boot:
+   ```bash
+   sudo systemctl enable teslam3companion.service
+   ```
 
-## Updating the System
+5. Start the service:
+   ```bash
+   sudo systemctl start teslam3companion.service
+   ```
 
-To update the system with new container versions:
+6. Check the status:
+   ```bash
+   sudo systemctl status teslam3companion.service
+   ```
 
-```bash
-# Pull the latest changes
-git pull
+To manage the service:
+- Stop: `sudo systemctl stop teslam3companion.service`
+- Restart: `sudo systemctl restart teslam3companion.service`
+- View logs: `sudo journalctl -u teslam3companion.service -f`
 
-# Rebuild and restart containers
-docker-compose down
-docker-compose build
-docker-compose up -d
-```
+## Connecting to Your Tesla
 
-## Monitoring
-
-The system includes Prometheus and Grafana for monitoring:
-
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000 (default login: admin/admin)
+1. Start your Tesla Model 3
+2. Locate the OBD-II port (check Tesla forums for the exact location in your model year)
+3. Connect the OBD-II adapter to the port
+4. Within the web interface, navigate to OBD > Connection and verify the connection status
+5. You should start seeing vehicle data coming in after a few seconds
 
 ## Troubleshooting
 
-### Service Not Starting
+### Common Issues and Solutions
 
-Check the logs for the specific service:
+1. **Services failing to start**
+   - Check logs: `docker-compose logs [service_name]`
+   - Verify environment variables in `.env` file
+   - Ensure you have sufficient disk space: `df -h`
 
-```bash
-docker-compose logs <service_name>
-```
+2. **Camera not detected**
+   - Check connection: `ls -l /dev/video0`
+   - Verify permissions: `sudo chmod 666 /dev/video0`
+   - Try a different USB port
 
-### Camera Not Detected
+3. **OBD-II adapter not connecting**
+   - Check physical connection
+   - Verify device path: `ls -l /dev/ttyUSB0`
+   - Try different baud rates in the web interface settings
 
-Verify the camera device is properly connected and the path in docker-compose.yml is correct:
+4. **High CPU/memory usage**
+   - Disable GPU acceleration if not working well
+   - Reduce LLM model size in the settings
+   - Adjust PostgreSQL and Redis memory limits in docker-compose.yml
 
-```bash
-ls -la /dev/video*
-```
+5. **Web interface not accessible**
+   - Check if services are running: `docker-compose ps`
+   - Verify network settings: `ip addr show`
+   - Check nginx logs: `docker-compose logs webui`
 
-### OBD Connection Issues
+### Getting Support
 
-Check if the OBD adapter is recognized:
+If you encounter issues not covered in this guide:
+1. Check the project GitHub issues page
+2. Search the community forums
+3. Submit a detailed bug report with logs and system information
 
-```bash
-ls -la /dev/ttyUSB*
-```
+## Security Recommendations
 
-Try reconnecting the adapter or restarting the OBD service:
+1. Change all default passwords
+2. Keep your system updated regularly
+3. Use strong, unique secrets in your `.env` file
+4. Enable Two-Factor Authentication for the admin interface
+5. Use Tailscale instead of exposing ports to the internet
+6. Set up SSL/TLS for all web interfaces
+7. Regularly backup your data and configurations
+8. Monitor system logs for suspicious activity
 
-```bash
-docker-compose restart obd
-```
+## Advanced Configuration
 
-### Memory Issues
-
-If the system is running out of memory, adjust the resource limits in docker-compose.yml:
-
-```yaml
-deploy:
-  resources:
-    limits:
-      memory: 4G  # Reduce from 6G to 4G for LLM service
-```
-
-### Disk Space Issues
-
-Check available disk space:
-
-```bash
-df -h
-```
-
-Consider moving the database and image storage to an external USB drive.
-
-## Backup and Restore
-
-### Backup
-
-```bash
-# Stop the services
-docker-compose down
-
-# Backup volumes
-tar -czvf tesla_backup.tar.gz ~/tesla_model3_rpi_project/data
-
-# Restart services
-docker-compose up -d
-```
-
-### Restore
-
-```bash
-# Stop the services
-docker-compose down
-
-# Restore volumes
-tar -xzvf tesla_backup.tar.gz -C /
-
-# Restart services
-docker-compose up -d
-```
-
-## Security Considerations
-
-- Change default Grafana password immediately
-- Consider setting up a VPN for remote access
-- Regularly update the system and containers
-- Use encrypted volumes for sensitive data
-- Limit physical access to the Raspberry Pi
-
-## Power Management
-
-The system is configured to operate efficiently on the Raspberry Pi 5. For optimal performance:
-
-- Use the official 5V/5A power supply
-- Consider adding a UPS for power stability
-- Mount in a location with good airflow in the vehicle
-- Monitor system temperature through the web interface
-
-## Additional Resources
-
-- [Docker Documentation](https://docs.docker.com/)
-- [Raspberry Pi Documentation](https://www.raspberrypi.com/documentation/)
-- [Llama 3 Documentation](https://ai.meta.com/llama/)
-- [OpenCV Documentation](https://docs.opencv.org/)
-- [OBD-II Documentation](https://en.wikipedia.org/wiki/On-board_diagnostics)
+For advanced configuration options, refer to the specific documentation for each component:
+- [Core API Documentation](./core/README.md)
+- [LLM Service Documentation](./llm/README.md)
+- [OpenCV Service Documentation](./opencv/README.md)
+- [OBD Service Documentation](./obd/README.md)
+- [Monitoring Stack Documentation](./monitoring/README.md)

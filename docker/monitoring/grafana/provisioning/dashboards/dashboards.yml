@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: 'Tesla Model 3 Companion Dashboards'
+    folder: 'Tesla M3 Companion'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true 

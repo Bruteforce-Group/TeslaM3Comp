@@ -293,7 +293,7 @@ services:
 
   # Camera motion detection
   motion:
-    image: ccrisan/motioneye:master-armhf
+    image: thehomerepot/motioneye:latest
     restart: unless-stopped
     volumes:
       - motion_config:/etc/motioneye
