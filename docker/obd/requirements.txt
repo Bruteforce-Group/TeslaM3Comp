@@ -2,7 +2,7 @@ fastapi==0.104.1
 uvicorn==0.23.2
 pydantic==2.4.2
 python-dotenv==1.0.0
-requests==2.31.0
+requests==2.32.2
 numpy==1.24.3
 python-obd==0.7.1
 pyserial==3.5
