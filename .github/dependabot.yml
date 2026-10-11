@@ -1,0 +1,64 @@
+# Managed by Bruteforce-Group/github-governance: created once when missing, then yours to edit.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directories:
+      - "/docker/webui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+      timezone: "Australia/Brisbane"
+    open-pull-requests-limit: 5
+    groups:
+      npm-version-updates:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+      npm-security-updates:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
+  - package-ecosystem: "pip"
+    directories:
+      - "/docker/core"
+      - "/docker/llm"
+      - "/docker/obd"
+      - "/docker/opencv"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+      timezone: "Australia/Brisbane"
+    open-pull-requests-limit: 5
+    groups:
+      pip-version-updates:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+      pip-security-updates:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
+  - package-ecosystem: "docker"
+    directories:
+      - "/docker/core"
+      - "/docker/llm"
+      - "/docker/obd"
+      - "/docker/opencv"
+      - "/docker/webui"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+      timezone: "Australia/Brisbane"
+    open-pull-requests-limit: 5
+    groups:
+      docker-version-updates:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+      docker-security-updates:
+        applies-to: "security-updates"
+        patterns:
+          - "*"
